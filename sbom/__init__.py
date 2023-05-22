@@ -34,18 +34,45 @@ def get_sbom(project, url):
     return r.json()
 
 
+def parse_overrides(overrides):
+    package, override = None, {}
+    for key, value in zip(['package', 'version', 'license', 'url'], overrides.split(',')):
+        if key == 'package':
+            package = value.strip()
+        else:
+            override[key] = value.strip()
+
+    return package, override
+
+
+def build_package_url(purl):
+    if purl.startswith('pkg:npm/'):
+        return f'https://www.npmjs.com/package/{purl[8:]}/'
+    if purl.startswith('pkg:pypi/'):
+        return f'https://pypi.org/project/{purl[9:].split("@")[0]}/'
+    return purl
+
+
+def parse_url(refs):
+    if refs is None:
+        return None
+    for ref in refs:
+        if ref['referenceType'] == 'purl':
+            return build_package_url(ref['referenceLocator'])
+
+
 def get_projects(path='./projects.ini'):
     # NOTE: read from .ini file.
     c = ConfigParser()
     c.read(path)
     for project in c.sections():
-        overrides = {}
+        overrides = defaultdict(dict)
         url = c[project]['url']
-        for package in c[project].keys():
-            if package == 'url':
+        for key in c[project].keys():
+            if not key.startswith('override'):
                 continue
-            version, license = c[project][package].split(',')
-            overrides[package] = (version, license)
+            package, override = parse_overrides(c[project][key])
+            overrides[package].update(override)
         yield project, url, overrides
 
 
@@ -56,18 +83,42 @@ def merge_dependencies(new, overrides, old=None):
             # Skip self
             continue
         package_name = package['name']
+
+        version = package['versionInfo']
+        license = package['licenseConcluded']
+        license = license.replace('NOASSERTION', 'Unknown')
+        url = parse_url(package.get('externalRefs'))
+
         try:
-            version, license = overrides[package_name]
+            override = overrides[package_name]
         except KeyError:
-            version = package['versionInfo']
-            license = package['licenseConcluded']
-            license = license.replace('NOASSERTION', 'Unknown')
-        old[package_name].append((version, license))
+            pass
+
+        else:
+            version = override.get('version', version)
+            license = override.get('license', license)
+            url = override.get('url', url)
+
+        old[package_name].append((version, license, url))
+
+    for package_name, override in overrides.items():
+        if package_name not in old:
+            old[package_name].append((
+                override.get('version'),
+                override.get('license'),
+                override.get('url'),
+            ))
+
     return old
 
 
 def print_record_csv(f, record):
-    csv = ", ".join([str(s) for s in record.values()]) + '\n'
+    values = []
+    for item in record.values():
+        item = str(item)
+        item = f'"{item}"' if ',' in item else item
+        values.append(item)
+    csv = ", ".join(values) + '\n'
     f.write(csv)
 
 
@@ -84,17 +135,24 @@ def get_line_printer(format):
 def print_report(data, format='csv', f=sys.stdout):
     line_printer = get_line_printer(format)
 
-    for package_name, v_and_l in data.keys():
-        versions = set()
-        licenses = set()
-        for version, license in v_and_l:
-            versions.add(version)
-            licenses.add(license)
+    for package_name, vlu in data.items():
+        versions, licenses, urls = set(), set(), set()
+
+        for version, license, url in vlu:
+            if version is not None:
+                versions.add(version)
+            if license is not None:
+                licenses.add(license)
+            if url is not None:
+                urls.add(url)
+
         line_printer(f, {
             'package': package_name,
             'versions': ', '.join(versions),
             'licenses': ', '.join(licenses),
+            'urls': ', '.join(urls),
         })
+
     f.flush()
 
 
@@ -102,8 +160,8 @@ def print_summary(data, format='csv', f=sys.stdout):
     line_printer = get_line_printer(format)
     licenses = defaultdict(int)
 
-    for package_name, v_and_l in data.items():
-        for version, license in v_and_l:
+    for package_name, vlu in data.items():
+        for version, license, url in vlu:
             licenses[license] += 1
 
     for license, count in licenses.items():
