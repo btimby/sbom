@@ -22,3 +22,11 @@ jobs:
 
     - name: make
       run: make sbom
+
+    - name: Commit changes
+      uses: EndBug/add-and-commit@v9
+      with:
+        author_name: Ben Timby
+        author_email: btimby@gmail.com
+        message: 'Updated SBOM'
+        add: 'sbom.html'
