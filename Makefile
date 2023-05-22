@@ -1,4 +1,5 @@
 deps: Pipfile.lock
+	pip3 install pipenv
 	PIPENV_VENV_IN_PROJECT=true pipenv install
 	touch .venv
 
