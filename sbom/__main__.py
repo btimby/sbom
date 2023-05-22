@@ -5,6 +5,9 @@ import argparse
 from urllib.parse import urlparse
 from os.path import split as pathsplit
 from pprint import pprint
+from datetime import datetime
+
+import jinja2
 
 from sbom import (
     get_projects, get_sbom, merge_dependencies, print_report, print_summary,
@@ -23,8 +26,11 @@ def main(args):
         project_name = path_parts[-1]
         projects = [(project_name, args.url, {})]
 
+    elif args.ini:
+        projects = get_projects(args.ini)
+
     else:
-        projects = get_projects()
+        raise Exception('Nothing to do, specify --ini or --url.')
 
     for project, url, overrides in projects:
         sbom = get_sbom(project, url)
@@ -32,8 +38,16 @@ def main(args):
 
     output = open(args.output, 'w') if args.output else sys.stdout
 
-    if args.summary:
+    if args.template:
+        env = jinja2.Environment()
+        with open(args.template, 'r') as f:
+            tmpl = env.from_string(f.read())
+        output.write(tmpl.render(deps=deps, now=datetime.now()))
+        output.flush()
+
+    elif args.summary:
         print_summary(deps, format=args.format, f=output)
+
     else:
         print_report(deps, format=args.format, f=output)
 
@@ -53,9 +67,11 @@ if __name__ == '__main__':
 
     parser.add_argument('-s', '--summary', action='store_true')
     parser.add_argument(
-        '-f', '--format', choices=('csv', 'json',), default='csv')
+        '-f', '--format', choices=('csv', 'json'), default='csv')
     parser.add_argument('-o', '--output')
     parser.add_argument('-u', '--url')
+    parser.add_argument('-i', '--ini', default='sbom.ini')
+    parser.add_argument('-t', '--template')
 
     args = parser.parse_args()
 

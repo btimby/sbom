@@ -12,11 +12,11 @@ from configparser import ConfigParser
 from collections import defaultdict
 
 
-GITHUB_API = 'https://api.github.com/'
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
+API_URL = 'https://api.github.com/'
+API_TOKEN = os.getenv('API_TOKEN')
 GITHUB_HEADERS = {
   'Accept': 'application/vnd.github+json',
-  'Authorization': f'Bearer {GITHUB_TOKEN}',
+  'Authorization': f'Bearer {API_TOKEN}',
   'X-GitHub-Api-Version': '2022-11-28',
 }
 LOGGER = logging.getLogger(__name__)
@@ -24,10 +24,12 @@ LOGGER.addHandler(logging.NullHandler())
 
 
 def get_sbom(project, url):
-    # /repos/OWNER/REPO/dependency-graph/sbom
+    # api path: /repos/OWNER/REPO/dependency-graph/sbom
+    if not API_TOKEN:
+        raise Exception('No github token, specify env. variable API_TOKEN=???')
     path = urlparse(url).path
     owner, repo = pathsplit(path)[0:2]
-    api_url = urljoin(GITHUB_API, f'repos/{owner}/{repo}dependency-graph/sbom')
+    api_url = urljoin(API_URL, f'repos/{owner}/{repo}dependency-graph/sbom')
     LOGGER.info('Fetching SBOM for %s', project)
     r = requests.get(api_url, headers=GITHUB_HEADERS)
     assert r.status_code == 200, 'Invalid status code %i' % r.status_code
@@ -36,6 +38,7 @@ def get_sbom(project, url):
 
 def parse_overrides(overrides):
     package, override = None, {}
+
     for key, value in zip(['package', 'version', 'license', 'url'], overrides.split(',')):
         if key == 'package':
             package = value.strip()
@@ -47,7 +50,7 @@ def parse_overrides(overrides):
 
 def build_package_url(purl):
     if purl.startswith('pkg:npm/'):
-        return f'https://www.npmjs.com/package/{purl[8:]}/'
+        return f'https://www.npmjs.com/package/{purl[8:].split("@")[0]}/'
     if purl.startswith('pkg:pypi/'):
         return f'https://pypi.org/project/{purl[9:].split("@")[0]}/'
     return purl
