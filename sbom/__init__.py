@@ -5,6 +5,7 @@ import logging
 import csv
 import json
 
+from json.decoder import JSONDecodeError
 from os.path import split as pathsplit
 from urllib.parse import urljoin, urlparse
 from configparser import ConfigParser
@@ -37,13 +38,13 @@ def get_sbom(project, url):
 
 
 def parse_overrides(overrides):
-    package, override = None, {}
+    try:
+        override = json.loads(overrides)
+    except JSONDecodeError:
+        LOGGER.exception(overrides)
+        raise
 
-    for key, value in zip(['package', 'version', 'license', 'url'], overrides.split(',')):
-        if key == 'package':
-            package = value.strip()
-        else:
-            override[key] = value.strip()
+    package = override.pop('name')
 
     return package, override
 
