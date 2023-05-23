@@ -93,6 +93,10 @@ def merge_dependencies(new, overrides, old=None):
         license = license.replace('NOASSERTION', 'Unknown')
         url = parse_url(package.get('externalRefs'))
 
+        # NOTE: heuristic:
+        if version.startswith('^') and license == 'Unknown':
+            continue
+
         try:
             override = overrides[package_name]
         except KeyError:
