@@ -81,7 +81,7 @@ def get_projects(path='./projects.ini'):
 
 
 def merge_dependencies(new, overrides, old=None):
-    old = old or defaultdict(list)
+    old = old or defaultdict(dict)
     for i, package in enumerate(new['sbom']['packages']):
         if i == 0:
             # Skip self
@@ -103,15 +103,14 @@ def merge_dependencies(new, overrides, old=None):
             license = override.get('license', license)
             url = override.get('url', url)
 
-        old[package_name].append((version, license, url))
+        old[package_name][version] = (license, url)
 
     for package_name, override in overrides.items():
         if package_name not in old:
-            old[package_name].append((
-                override.get('version'),
+            old[package_name][override['version']] = (
                 override.get('license'),
                 override.get('url'),
-            ))
+            )
 
     return old
 
@@ -142,7 +141,7 @@ def print_report(data, format='csv', f=sys.stdout):
     for package_name, vlu in data.items():
         versions, licenses, urls = set(), set(), set()
 
-        for version, license, url in vlu:
+        for version, (license, url) in vlu.items():
             if version is not None:
                 versions.add(version)
             if license is not None:
@@ -165,7 +164,7 @@ def print_summary(data, format='csv', f=sys.stdout):
     licenses = defaultdict(int)
 
     for package_name, vlu in data.items():
-        for version, license, url in vlu:
+        for version, (license, url) in vlu.items():
             licenses[license] += 1
 
     for license, count in licenses.items():

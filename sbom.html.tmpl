@@ -15,7 +15,7 @@
       </thead>
      <tbody>
         {% for package_name, vlu in deps.items() %}
-          {% for version, license, url in vlu %}
+          {% for version, (license, url) in vlu.items() %}
         <tr>
           <td>{{ package_name }}</td>
           <td>{{ version }}</td>
